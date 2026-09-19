@@ -87,11 +87,16 @@
     <header class="w-full bg-retro-card/90 border-b-4 border-black p-3 sticky top-0 z-50 backdrop-blur-md">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <div class="flex items-center gap-3 cursor-pointer" onclick="switchRole('lobby')">
-                <span class="text-3xl">🧠</span>
+                <img src="loca_avatar.png" alt="이로카 Loca" class="w-11 h-11 rounded-xl border-2 border-retro-yellow shadow-retro-sm object-cover bg-black">
                 <div>
-                    <h1 class="font-dohyeon text-xl sm:text-2xl text-retro-yellow tracking-wider drop-shadow-[2px_2px_0px_#000]">
-                        노브레인 서바이벌 (최대 30인)
-                    </h1>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-dohyeon text-xl sm:text-2xl text-retro-yellow tracking-wider drop-shadow-[2px_2px_0px_#000]">
+                            노브레인 서바이벌
+                        </h1>
+                        <span class="bg-retro-purple text-retro-yellow font-dohyeon text-xs px-2.5 py-0.5 rounded-full border border-black shadow-retro-sm flex items-center gap-1">
+                            <span>🐸</span> 주최: 이로카 Loca
+                        </span>
+                    </div>
                     <p class="text-xs text-retro-cyan font-bold tracking-widest uppercase">실시간 30초 시한폭탄 상식퀴즈</p>
                 </div>
             </div>
@@ -113,8 +118,11 @@
         <!-- 1. LOBBY SCREEN -->
         <section id="view-lobby" class="flex flex-col items-center justify-center py-8 text-center space-y-8">
             <div class="space-y-3 max-w-2xl">
-                <div class="inline-block bg-retro-yellow text-black font-dohyeon text-lg px-4 py-1 rounded-full border-2 border-black shadow-retro-sm mb-2 transform -rotate-1">
-                    ⚡ 30인 최강 상식 최약체 가리기 서바이벌 ⚡
+                <div class="flex items-center justify-center gap-3 mb-2">
+                    <img src="loca_avatar.png" alt="이로카 Loca" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl border-3 border-black shadow-neon-yellow bg-black object-cover animate-pulse-fast">
+                    <div class="inline-block bg-retro-yellow text-black font-dohyeon text-base sm:text-lg px-4 py-1 rounded-full border-2 border-black shadow-retro-sm transform -rotate-1">
+                        🐸 이로카 Loca 주최 &bull; 30인 최강 상식 최약체 가리기 서바이벌 ⚡
+                    </div>
                 </div>
                 <h2 class="font-dohyeon text-4xl sm:text-6xl text-white tracking-wide leading-tight drop-shadow-[4px_4px_0px_#FF007A]">
                     문제당 <span class="text-retro-yellow">30초</span> 제한시간!<br>
@@ -250,7 +258,8 @@
                 <div class="lg:col-span-2 bg-retro-card p-6 rounded-2xl border-4 border-black shadow-neon-pink space-y-4">
                     <div class="flex justify-between items-center border-b-2 border-gray-800 pb-3">
                         <h2 class="font-dohyeon text-2xl text-retro-yellow flex items-center gap-2">
-                            <span>👑</span> 개최자 진행 데스크
+                            <img src="loca_avatar.png" alt="이로카 Loca" class="w-8 h-8 rounded-lg border border-black object-cover">
+                            <span>👑</span> 이로카 Loca 진행 데스크
                         </h2>
                         <div class="flex items-center gap-2">
                             <label class="text-xs text-gray-400 font-bold">라운드:</label>
@@ -381,8 +390,13 @@
     </main>
 
     <!-- FOOTER -->
-    <footer class="w-full bg-black/60 border-t border-gray-800 p-4 text-center text-xs text-gray-500">
-        🧠 노브레인 서바이벌 대회 &bull; 30초 제한시간 / 초록불(정답) & 붉은불(오답) 동기화 시스템
+    <footer class="w-full bg-black/60 border-t border-gray-800 p-4 text-center text-xs text-gray-400 flex flex-col sm:flex-row items-center justify-center gap-2">
+        <div class="flex items-center gap-1.5">
+            <img src="loca_avatar.png" alt="이로카 Loca" class="w-5 h-5 rounded border border-gray-700 object-cover">
+            <span>주최: <strong class="text-retro-yellow font-bold">이로카 Loca</strong></span>
+        </div>
+        <span class="hidden sm:inline">&bull;</span>
+        <span>🧠 노브레인 서바이벌 대회 (최대 30인) &bull; 30초 제한시간 / 초록불(정답) & 붉은불(오답) 동기화</span>
     </footer>
 
     <!-- JAVASCRIPT APPLICATION LOGIC -->
