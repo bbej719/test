@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧠 노브레인 서바이벌 - 30인 서바이벌 상식 퀴즈</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🧠 노브레인 서바이벌 - 30인 실시간 멀티플레이 상식 퀴즈</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts -->
@@ -12,6 +12,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Gamja+Flower&family=Pretendard:wght@400;600;800;900&display=swap" rel="stylesheet">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- MQTT.js for Real-time Cloud Multi-device WebSockets -->
+    <script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.5/dist/mqtt.min.js"></script>
+    <!-- QRCode.js for Smartphone scanning -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <script>
         tailwind.config = {
@@ -79,17 +83,25 @@
         .led-white { background-color: #FFFFFF; box-shadow: 0 0 8px #FFFFFF; }
         .led-green { background-color: #00FF66; box-shadow: 0 0 12px #00FF66; }
         .led-red { background-color: #FF2A55; box-shadow: 0 0 12px #FF2A55; }
+
+        /* QR Code wrapper styling */
+        #room-qrcode img {
+            margin: 0 auto;
+            border: 4px solid #000;
+            border-radius: 8px;
+        }
     </style>
 </head>
 <body class="min-h-screen font-sans flex flex-col justify-between selection:bg-retro-pink selection:text-white">
 
     <!-- TOP HEADER -->
     <header class="w-full bg-retro-card/90 border-b-4 border-black p-3 sticky top-0 z-50 backdrop-blur-md">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
+            <!-- Logo & Host Badge -->
             <div class="flex items-center gap-3 cursor-pointer" onclick="switchRole('lobby')">
-                <img src="loca_avatar.png" alt="이로카 Loca" class="w-11 h-11 rounded-xl border-2 border-retro-yellow shadow-retro-sm object-cover bg-black">
+                <img src="loca_avatar.png" alt="이로카 Loca" class="w-11 h-11 rounded-xl border-2 border-retro-yellow shadow-retro-sm object-cover bg-black flex-shrink-0">
                 <div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
                         <h1 class="font-dohyeon text-xl sm:text-2xl text-retro-yellow tracking-wider drop-shadow-[2px_2px_0px_#000]">
                             노브레인 서바이벌
                         </h1>
@@ -97,16 +109,38 @@
                             <span>🐸</span> 주최: 이로카 Loca
                         </span>
                     </div>
-                    <p class="text-xs text-retro-cyan font-bold tracking-widest uppercase">실시간 30초 시한폭탄 상식퀴즈</p>
+                    <p class="text-xs text-retro-cyan font-bold tracking-widest uppercase">실시간 30인 클라우드 멀티플레이</p>
                 </div>
             </div>
             
-            <div class="flex items-center gap-2" id="header-status">
-                <span id="role-badge" class="px-3 py-1 rounded-full text-xs font-black uppercase border-2 border-black bg-gray-700 text-white shadow-retro-sm">
+            <!-- Connection & Room Badge & Action Controls -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <!-- Room Badge -->
+                <div class="flex items-center bg-black/80 px-2.5 py-1 rounded-lg border border-gray-700 text-xs">
+                    <span class="text-gray-400 mr-1 font-bold">방:</span>
+                    <span id="header-room-code" class="text-retro-yellow font-dohyeon text-sm tracking-wider">LOCA</span>
+                    <button onclick="promptChangeRoom()" class="ml-1.5 text-gray-400 hover:text-retro-cyan text-[11px]" title="방 코드 변경">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                </div>
+
+                <!-- Live Network Status Dot -->
+                <div id="network-badge" class="flex items-center gap-1.5 bg-black/80 px-2.5 py-1 rounded-lg border border-gray-700 text-[11px] font-bold text-gray-300">
+                    <span id="network-dot" class="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>
+                    <span id="network-text">연결 중...</span>
+                </div>
+
+                <!-- Invite Button -->
+                <button onclick="openInviteModal()" class="bg-retro-cyan hover:bg-cyan-400 text-black text-xs font-black px-3 py-1.5 rounded-lg border-2 border-black shadow-retro-sm transition active:translate-y-0.5 flex items-center gap-1">
+                    <i class="fa-solid fa-qrcode"></i> <span class="hidden sm:inline">모바일</span> 초대
+                </button>
+
+                <!-- Role Badge & Change -->
+                <span id="role-badge" class="px-2.5 py-1 rounded-full text-xs font-black uppercase border-2 border-black bg-gray-700 text-white shadow-retro-sm">
                     로비
                 </span>
-                <button onclick="switchRole('lobby')" class="bg-retro-pink hover:bg-pink-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg border-2 border-black shadow-retro-sm transition active:translate-y-0.5">
-                    <i class="fa-solid fa-right-from-bracket mr-1"></i> 역할 변경
+                <button onclick="switchRole('lobby')" class="bg-retro-pink hover:bg-pink-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border-2 border-black shadow-retro-sm transition active:translate-y-0.5">
+                    <i class="fa-solid fa-right-from-bracket"></i>
                 </button>
             </div>
         </div>
@@ -116,9 +150,9 @@
     <main class="max-w-7xl w-full mx-auto p-4 sm:p-6 flex-1 flex flex-col justify-center">
 
         <!-- 1. LOBBY SCREEN -->
-        <section id="view-lobby" class="flex flex-col items-center justify-center py-8 text-center space-y-8">
+        <section id="view-lobby" class="flex flex-col items-center justify-center py-6 text-center space-y-6">
             <div class="space-y-3 max-w-2xl">
-                <div class="flex items-center justify-center gap-3 mb-2">
+                <div class="flex items-center justify-center gap-3 mb-2 flex-wrap">
                     <img src="loca_avatar.png" alt="이로카 Loca" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl border-3 border-black shadow-neon-yellow bg-black object-cover animate-pulse-fast">
                     <div class="inline-block bg-retro-yellow text-black font-dohyeon text-base sm:text-lg px-4 py-1 rounded-full border-2 border-black shadow-retro-sm transform -rotate-1">
                         🐸 이로카 Loca 주최 &bull; 30인 최강 상식 최약체 가리기 서바이벌 ⚡
@@ -129,8 +163,8 @@
                     정답은 <span class="text-retro-green">초록불</span>, 오답은 <span class="text-retro-red">붉은불</span>
                 </h2>
                 <p class="text-gray-300 text-sm sm:text-base leading-relaxed">
-                    개최자는 30초 타이머와 출제를 컨트롤하며 최대 30명의 정답을 실시간으로 채점합니다.<br>
-                    다음 문제로 이동 시 모든 참가자의 표시등이 <strong class="text-white">하얀색</strong>으로 자동 초기화됩니다!
+                    스마트폰이나 다른 컴퓨터에서 링크를 열면 <strong>각자 실시간으로 접속</strong>하여 참여할 수 있습니다!<br>
+                    개최자가 문제를 출제하면 모든 참가자의 화면에 30초 카운트다운이 시작됩니다.
                 </p>
             </div>
 
@@ -142,10 +176,10 @@
                     <span class="bg-retro-pink text-white text-xs font-bold px-2.5 py-1 rounded border border-black uppercase shadow-retro-sm">Host Dashboard</span>
                     <h3 class="font-dohyeon text-2xl text-retro-yellow mt-3 mb-1">👑 개최자 (진행자)</h3>
                     <p class="text-xs text-gray-300 leading-normal">
-                        30명 참가자 실시간 정답 채점, 30초 타이머 제어, O/X 상태 및 색상 현황을 총괄합니다.
+                        참가자 모바일 접속 QR 생성, 30초 퀴즈 출제, 실시간 채점 및 표시등 색상 제어 총괄.
                     </p>
                     <div class="mt-4 flex items-center text-retro-pink font-bold text-sm group-hover:translate-x-1 transition">
-                        개최자 대시보드 입장 <i class="fa-solid fa-arrow-right ml-2"></i>
+                        진행 데스크 입장 <i class="fa-solid fa-arrow-right ml-2"></i>
                     </div>
                 </div>
 
@@ -153,20 +187,28 @@
                 <div onclick="switchRole('participant')" class="group cursor-pointer bg-retro-card hover:bg-cyan-900/40 p-6 rounded-2xl border-4 border-black shadow-neon-cyan transition-all transform hover:-translate-y-1 text-left relative overflow-hidden">
                     <div class="absolute -right-4 -bottom-4 text-8xl opacity-10 group-hover:opacity-20 transition">🕹️</div>
                     <span class="bg-retro-cyan text-black text-xs font-bold px-2.5 py-1 rounded border border-black uppercase shadow-retro-sm">Player Screen</span>
-                    <h3 class="font-dohyeon text-2xl text-retro-cyan mt-3 mb-1">🎮 참가자 (최대 30명)</h3>
+                    <h3 class="font-dohyeon text-2xl text-retro-cyan mt-3 mb-1">🎮 참가자 (휴대폰/PC)</h3>
                     <p class="text-xs text-gray-300 leading-normal">
-                        닉네임 등록 후 30초 카운트다운 내 정답을 입력합니다. (타인의 정답은 보이지 않음)
+                        닉네임 등록 후 실시간으로 전송되는 30초 퀴즈를 풀고 정답 제출!
                     </p>
                     <div class="mt-4 flex items-center text-retro-cyan font-bold text-sm group-hover:translate-x-1 transition">
-                        참가자 모드 접속하기 <i class="fa-solid fa-arrow-right ml-2"></i>
+                        참가자 화면 접속 <i class="fa-solid fa-arrow-right ml-2"></i>
                     </div>
                 </div>
             </div>
 
-            <!-- Demo Quick Simulator -->
-            <div class="bg-black/40 border border-gray-800 rounded-xl p-4 max-w-xl text-xs text-gray-400 text-left flex gap-3 items-center">
-                <i class="fa-solid fa-circle-info text-retro-cyan text-2xl flex-shrink-0"></i>
-                <p><strong>30인 테스트 안내:</strong> 개최자 화면에서 <span class="text-retro-yellow font-bold">[🤖 가상 참가자 30명 채우기]</span> 버튼을 누르면 30명 풀방 테스트를 즉시 체험할 수 있습니다.</p>
+            <!-- Quick Invite Banner -->
+            <div class="bg-black/50 border-2 border-retro-cyan/40 rounded-2xl p-4 max-w-xl w-full text-center space-y-2">
+                <div class="flex items-center justify-center gap-2 text-retro-cyan font-bold text-sm">
+                    <i class="fa-solid fa-mobile-screen-button text-lg"></i>
+                    <span>친구들을 초대하려면?</span>
+                </div>
+                <p class="text-xs text-gray-400">휴대폰 카메라로 QR 코드를 찍거나 링크를 카톡/디코로 보내면 바로 들어옵니다.</p>
+                <div class="pt-1">
+                    <button onclick="openInviteModal()" class="bg-retro-yellow hover:bg-yellow-400 text-black font-dohyeon px-4 py-2 rounded-xl border-2 border-black shadow-retro-sm text-sm">
+                        📲 스마트폰 초대 QR코드 & 링크 보기
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -175,8 +217,10 @@
             <!-- Join Section -->
             <div id="part-login-card" class="max-w-md mx-auto bg-retro-card p-6 rounded-2xl border-4 border-black shadow-neon-cyan text-center space-y-4">
                 <div class="text-4xl">🚀</div>
-                <h3 class="font-dohyeon text-2xl text-retro-cyan">참가자 프로필 등록</h3>
-                <p class="text-xs text-gray-300">대회에서 사용할 닉네임을 입력하세요 (최대 30명 접속 가능)</p>
+                <h3 class="font-dohyeon text-2xl text-retro-cyan">참가자 닉네임 등록</h3>
+                <p class="text-xs text-gray-300">
+                    현재 접속 방: <strong id="part-room-badge" class="text-retro-yellow font-dohyeon text-base">LOCA</strong>
+                </p>
                 <div>
                     <input type="text" id="part-name-input" maxlength="10" placeholder="닉네임 (예: 천재지변, 뇌순남)" 
                            class="w-full bg-black/60 border-2 border-retro-cyan text-white p-3 rounded-xl text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-retro-cyan">
@@ -184,14 +228,15 @@
                 <button onclick="registerParticipant()" class="w-full bg-retro-cyan hover:bg-cyan-400 text-black font-dohyeon text-xl py-3 rounded-xl border-2 border-black shadow-retro-black transition active:translate-y-1">
                     대회 참가 신청
                 </button>
+                <p class="text-[11px] text-gray-500">신청 즉시 주최자 화면에 실시간으로 등록됩니다.</p>
             </div>
 
             <!-- Participant Main Game Board -->
-            <div id="part-game-card" class="hidden space-y-6 max-w-2xl mx-auto">
+            <div id="part-game-card" class="hidden space-y-5 max-w-2xl mx-auto">
                 <!-- Status Bar with Color LED -->
                 <div id="part-status-bar" class="bg-retro-card p-4 rounded-xl border-4 border-black shadow-retro-black flex justify-between items-center transition-all duration-500">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-retro-purple border-2 border-black flex items-center justify-center font-bold text-lg text-retro-yellow" id="part-avatar">
+                        <div class="w-11 h-11 rounded-full bg-retro-purple border-2 border-black flex items-center justify-center font-bold text-lg text-retro-yellow shadow-retro-sm" id="part-avatar">
                             ?
                         </div>
                         <div>
@@ -211,7 +256,7 @@
                 </div>
 
                 <!-- Current Question & 30s Countdown Card -->
-                <div class="bg-retro-card p-6 sm:p-8 rounded-2xl border-4 border-black shadow-neon-yellow relative overflow-hidden">
+                <div class="bg-retro-card p-6 sm:p-8 rounded-2xl border-4 border-black shadow-neon-yellow relative overflow-hidden text-center">
                     <div class="flex justify-between items-center mb-4">
                         <span class="bg-retro-purple text-retro-yellow text-xs font-bold px-3 py-1 rounded-full border border-black">
                             <i class="fa-solid fa-bullhorn mr-1"></i> 문제 출제
@@ -225,13 +270,13 @@
                         </div>
                     </div>
 
-                    <h2 id="part-question-text" class="font-dohyeon text-2xl sm:text-3xl text-white min-h-[90px] flex items-center justify-center text-center leading-snug">
-                        개최자가 30초 퀴즈를 출제할 때까지 기다려주세요...
+                    <h2 id="part-question-text" class="font-dohyeon text-2xl sm:text-3xl text-white min-h-[90px] flex items-center justify-center leading-snug">
+                        주최자가 30초 퀴즈를 출제할 때까지 기다려주세요...
                     </h2>
                 </div>
 
                 <!-- Answer Input Area -->
-                <div class="bg-retro-card p-6 rounded-2xl border-4 border-black shadow-retro-black space-y-4">
+                <div class="bg-retro-card p-5 sm:p-6 rounded-2xl border-4 border-black shadow-retro-black space-y-4">
                     <label class="block font-dohyeon text-retro-cyan text-lg">
                         <i class="fa-solid fa-pen-to-square mr-1"></i> 정답 입력란 (30초 제한)
                     </label>
@@ -256,7 +301,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Question Control Panel -->
                 <div class="lg:col-span-2 bg-retro-card p-6 rounded-2xl border-4 border-black shadow-neon-pink space-y-4">
-                    <div class="flex justify-between items-center border-b-2 border-gray-800 pb-3">
+                    <div class="flex justify-between items-center border-b-2 border-gray-800 pb-3 flex-wrap gap-2">
                         <h2 class="font-dohyeon text-2xl text-retro-yellow flex items-center gap-2">
                             <img src="loca_avatar.png" alt="이로카 Loca" class="w-8 h-8 rounded-lg border border-black object-cover">
                             <span>👑</span> 이로카 Loca 진행 데스크
@@ -340,6 +385,9 @@
 
                     <!-- Quick Tools & FX -->
                     <div class="space-y-2">
+                        <button onclick="openInviteModal()" class="w-full bg-retro-cyan/20 hover:bg-retro-cyan/40 text-retro-cyan border-2 border-retro-cyan py-2 rounded-xl font-dohyeon text-sm flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-qrcode"></i> 📲 친구 초대 QR & 공유 링크 열기
+                        </button>
                         <div class="grid grid-cols-2 gap-2">
                             <button onclick="populateDummyParticipants(30)" class="bg-purple-900/40 hover:bg-purple-900/70 text-retro-yellow border border-purple-500 text-xs font-bold py-2 rounded-lg">
                                 🤖 30명 봇 채우기
@@ -367,7 +415,7 @@
                         <h3 class="font-dohyeon text-2xl text-white flex items-center gap-2">
                             <span>🎮</span> 참가자 30인 정답 & 채점 현황판
                         </h3>
-                        <p class="text-xs text-gray-400">참가자의 입력 정답과 초록불(정답)/붉은불(오답) 상태가 개최자에게만 실시간 표시됩니다.</p>
+                        <p class="text-xs text-gray-400">참가자의 입력 정답과 초록불(정답)/붉은불(오답) 상태가 개최자에게 실시간 표시됩니다.</p>
                     </div>
 
                     <div class="flex gap-2">
@@ -380,14 +428,49 @@
                     <!-- Empty State -->
                     <div class="col-span-full py-12 text-center text-gray-500 space-y-2">
                         <i class="fa-solid fa-users-slash text-4xl"></i>
-                        <p class="font-bold">접속한 참가자가 없습니다 (최대 30명 접속 가능)</p>
-                        <p class="text-xs">참가자 화면 탭을 열거나 '30명 봇 채우기' 버튼으로 테스트해보세요.</p>
+                        <p class="font-bold">접속한 참가자가 없습니다 (최대 30명 동시 접속 가능)</p>
+                        <p class="text-xs">상단의 '모바일 초대' QR코드를 친구에게 보여주거나 링크를 공유해보세요!</p>
                     </div>
                 </div>
             </div>
         </section>
 
     </main>
+
+    <!-- QR CODE & SHARE MODAL -->
+    <div id="invite-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-retro-card max-w-sm w-full p-6 rounded-2xl border-4 border-black shadow-neon-cyan text-center space-y-4 relative">
+            <button onclick="closeInviteModal()" class="absolute top-3 right-3 text-gray-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flex items-center justify-center gap-2">
+                <img src="loca_avatar.png" alt="이로카 Loca" class="w-8 h-8 rounded-lg border border-black object-cover">
+                <h3 class="font-dohyeon text-2xl text-retro-cyan">모바일 참가자 초대</h3>
+            </div>
+            <p class="text-xs text-gray-300">
+                스마트폰 기본 카메라로 아래 QR 코드를 비추면 즉시 참가자 화면으로 연결됩니다.
+            </p>
+            
+            <!-- QR Display Area -->
+            <div class="bg-white p-3 rounded-xl border-2 border-black inline-block shadow-retro-sm">
+                <div id="room-qrcode" class="w-[140px] h-[140px] mx-auto flex items-center justify-center"></div>
+            </div>
+
+            <!-- Room Info & Link Copy -->
+            <div class="space-y-2">
+                <div class="bg-black/70 p-2 rounded-lg border border-gray-700 text-xs flex justify-between items-center">
+                    <span class="text-gray-400">현재 방 코드:</span>
+                    <strong id="modal-room-code" class="text-retro-yellow font-dohyeon text-base">LOCA</strong>
+                </div>
+                <button onclick="copyInviteLink()" class="w-full bg-retro-yellow hover:bg-yellow-400 text-black font-dohyeon py-3 rounded-xl border-2 border-black shadow-retro-sm transition active:translate-y-0.5 text-base flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-link"></i> 초대 링크 복사하기
+                </button>
+            </div>
+            <p id="copy-status-msg" class="text-xs text-retro-green font-bold hidden">
+                ✅ 링크가 클립보드에 복사되었습니다! 카톡 등에 붙여넣기하세요.
+            </p>
+        </div>
+    </div>
 
     <!-- FOOTER -->
     <footer class="w-full bg-black/60 border-t border-gray-800 p-4 text-center text-xs text-gray-400 flex flex-col sm:flex-row items-center justify-center gap-2">
@@ -396,14 +479,19 @@
             <span>주최: <strong class="text-retro-yellow font-bold">이로카 Loca</strong></span>
         </div>
         <span class="hidden sm:inline">&bull;</span>
-        <span>🧠 노브레인 서바이벌 대회 (최대 30인) &bull; 30초 제한시간 / 초록불(정답) & 붉은불(오답) 동기화</span>
+        <span>🧠 노브레인 서바이벌 대회 (최대 30인) &bull; 30초 제한시간 / 초록불(정답) & 붉은불(오답) 클라우드 실시간 동기화</span>
     </footer>
 
     <!-- JAVASCRIPT APPLICATION LOGIC -->
     <script>
-        // --- 1. GLOBAL STATE & REAL-TIME BROADCAST CHANNEL ---
-        const CHANNEL_NAME = 'nobrain_survival_30p_channel';
-        const channel = new BroadcastChannel(CHANNEL_NAME);
+        // --- 1. ROOM & REAL-TIME CLOUD NETWORKING (MQTT WebSockets) ---
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentRoom = (urlParams.get('room') || localStorage.getItem('nobrain_room') || 'LOCA').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 12) || 'LOCA';
+        localStorage.setItem('nobrain_room', currentRoom);
+
+        const MQTT_TOPIC = `nobrain30/room/${currentRoom}`;
+        const LOCAL_CHANNEL_NAME = `nobrain30_channel_${currentRoom}`;
+        const localChannel = new BroadcastChannel(LOCAL_CHANNEL_NAME);
 
         // Application State
         let state = {
@@ -412,15 +500,7 @@
             referenceAnswer: '',
             timer: 30,
             isTimerActive: false,
-            participants: {} 
-            /*
-              participants[id] = {
-                  name: '닉네임',
-                  answer: '제출한 정답',
-                  submitted: false,
-                  statusColor: 'white' // 'white' (대기), 'green' (정답), 'red' (오답)
-              }
-            */
+            participants: {}
         };
 
         let currentRole = 'lobby';
@@ -429,6 +509,301 @@
 
         let myName = localStorage.getItem('no_brain_my_name') || '';
         let timerInterval = null;
+        let mqttClient = null;
+        let isMqttConnected = false;
+
+        function updateRoomUI() {
+            document.getElementById('header-room-code').innerText = currentRoom;
+            const modalRoom = document.getElementById('modal-room-code');
+            if (modalRoom) modalRoom.innerText = currentRoom;
+            const partRoom = document.getElementById('part-room-badge');
+            if (partRoom) partRoom.innerText = currentRoom;
+        }
+
+        function promptChangeRoom() {
+            const newRoom = prompt("접속할 방 코드를 입력하세요 (예: LOCA, QUIZ1):", currentRoom);
+            if (newRoom) {
+                const cleaned = newRoom.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 12);
+                if (cleaned) {
+                    const newUrl = new URL(window.location.href);
+                    newUrl.searchParams.set('room', cleaned);
+                    window.location.href = newUrl.toString();
+                }
+            }
+        }
+
+        function getInviteUrl() {
+            let base = window.location.origin + window.location.pathname;
+            if (base.startsWith('file:')) {
+                base = 'https://bbej719.github.io/test/';
+            }
+            return `${base}?room=${encodeURIComponent(currentRoom)}&role=participant`;
+        }
+
+        function openInviteModal() {
+            document.getElementById('invite-modal').classList.remove('hidden');
+            renderQrCode();
+        }
+
+        function closeInviteModal() {
+            document.getElementById('invite-modal').classList.add('hidden');
+            const msg = document.getElementById('copy-status-msg');
+            if (msg) msg.classList.add('hidden');
+        }
+
+        function renderQrCode() {
+            const container = document.getElementById('room-qrcode');
+            if (!container) return;
+            container.innerHTML = '';
+            new QRCode(container, {
+                text: getInviteUrl(),
+                width: 140,
+                height: 140,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+
+        function copyInviteLink() {
+            const url = getInviteUrl();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    showCopySuccess();
+                }).catch(() => fallbackCopy(url));
+            } else {
+                fallbackCopy(url);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            showCopySuccess();
+        }
+
+        function showCopySuccess() {
+            const msg = document.getElementById('copy-status-msg');
+            if (msg) {
+                msg.classList.remove('hidden');
+                setTimeout(() => msg.classList.add('hidden'), 3500);
+            }
+        }
+
+        // Connect to Cloud WebSocket MQTT Broker
+        function setupMqtt() {
+            const netDot = document.getElementById('network-dot');
+            const netText = document.getElementById('network-text');
+
+            try {
+                // Connect to HiveMQ public broker over TLS WebSockets
+                const clientId = 'nobrain_' + Math.random().toString(16).substr(2, 8);
+                mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt', {
+                    clientId: clientId,
+                    clean: true,
+                    connectTimeout: 5000,
+                    reconnectPeriod: 3000,
+                    keepalive: 30
+                });
+
+                mqttClient.on('connect', () => {
+                    isMqttConnected = true;
+                    netDot.className = 'w-2.5 h-2.5 rounded-full bg-retro-green shadow-[0_0_8px_#00FF66]';
+                    netText.innerText = '클라우드 연동됨';
+
+                    mqttClient.subscribe(MQTT_TOPIC, { qos: 0 });
+
+                    // If participant, announce presence to host
+                    if (currentRole === 'participant' && myName) {
+                        broadcastMessage('PARTICIPANT_JOINED', {
+                            id: myParticipantId,
+                            name: myName
+                        });
+                    }
+                });
+
+                mqttClient.on('message', (topic, payload) => {
+                    try {
+                        const data = JSON.parse(payload.toString());
+                        if (data && data.sender !== myParticipantId) {
+                            handleIncomingEvent(data);
+                        }
+                    } catch(e) {}
+                });
+
+                mqttClient.on('reconnect', () => {
+                    netDot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse';
+                    netText.innerText = '재연결 중...';
+                });
+
+                mqttClient.on('error', () => {
+                    netDot.className = 'w-2.5 h-2.5 rounded-full bg-retro-red';
+                    netText.innerText = '오프라인';
+                });
+            } catch(e) {
+                netDot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-400';
+                netText.innerText = '로컬 모드';
+            }
+        }
+
+        // Dual Broadcast: Send via Cloud MQTT + Local BroadcastChannel
+        function broadcastMessage(type, payload = {}) {
+            const packet = {
+                type: type,
+                sender: myParticipantId,
+                payload: payload,
+                state: state,
+                timestamp: Date.now()
+            };
+
+            // 1. MQTT WebSockets (Cloud - across phones and computers)
+            if (mqttClient && isMqttConnected) {
+                try {
+                    mqttClient.publish(MQTT_TOPIC, JSON.stringify(packet));
+                } catch(e) {}
+            }
+
+            // 2. BroadcastChannel (Same-device multiple tabs)
+            try {
+                localChannel.postMessage(packet);
+            } catch(e) {}
+
+            saveState();
+            render();
+        }
+
+        // Incoming message handler for all clients
+        function handleIncomingEvent(packet) {
+            const { type, payload, sender } = packet;
+
+            if (type === 'PARTICIPANT_JOINED') {
+                if (!state.participants[payload.id]) {
+                    state.participants[payload.id] = {
+                        name: payload.name,
+                        answer: '',
+                        submitted: false,
+                        statusColor: 'white'
+                    };
+                    if (currentRole === 'host') {
+                        playSound('tick');
+                        // Host replies with current game state
+                        broadcastMessage('STATE_SYNC', { state: state });
+                    }
+                }
+            } else if (type === 'STATE_SYNC') {
+                if (currentRole !== 'host' && packet.state) {
+                    state = packet.state;
+                }
+            } else if (type === 'START_30S_QUIZ') {
+                state.currentRound = payload.round;
+                state.question = payload.question;
+                state.referenceAnswer = payload.referenceAnswer;
+                state.timer = 30;
+                state.isTimerActive = true;
+
+                // Vibrate smartphone if supported
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                playSound('start');
+
+                // Start local countdown mirror
+                startLocalTimer(30);
+            } else if (type === 'TIMER_TICK') {
+                state.timer = payload.timer;
+                if (state.timer <= 5 && state.timer > 0) {
+                    playSound('tick');
+                }
+                if (state.timer === 0) {
+                    state.isTimerActive = false;
+                    playSound('wrong');
+                }
+            } else if (type === 'SUBMIT_ANSWER') {
+                if (state.participants[payload.id]) {
+                    state.participants[payload.id].answer = payload.answer;
+                    state.participants[payload.id].submitted = true;
+                    if (currentRole === 'host') playSound('tick');
+                }
+            } else if (type === 'COLOR_CHANGE') {
+                if (state.participants[payload.participantId]) {
+                    state.participants[payload.participantId].statusColor = payload.color;
+                    if (payload.participantId === myParticipantId) {
+                        if (payload.color === 'green') {
+                            playSound('correct');
+                            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                        }
+                        if (payload.color === 'red') {
+                            playSound('wrong');
+                            if (navigator.vibrate) navigator.vibrate([400]);
+                        }
+                    }
+                }
+            } else if (type === 'AUTO_GRADE_COMPLETE') {
+                state.participants = payload.participants || state.participants;
+                const myInfo = state.participants[myParticipantId];
+                if (myInfo) {
+                    if (myInfo.statusColor === 'green') {
+                        playSound('correct');
+                        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                    } else if (myInfo.statusColor === 'red') {
+                        playSound('wrong');
+                        if (navigator.vibrate) navigator.vibrate([400]);
+                    }
+                }
+            } else if (type === 'NEXT_QUESTION_RESET') {
+                if (timerInterval) clearInterval(timerInterval);
+                state.currentRound = payload.round;
+                state.question = '';
+                state.referenceAnswer = '';
+                state.timer = 30;
+                state.isTimerActive = false;
+
+                Object.keys(state.participants).forEach(id => {
+                    state.participants[id].answer = '';
+                    state.participants[id].submitted = false;
+                    state.participants[id].statusColor = 'white';
+                });
+            } else if (type === 'STOP_TIMER') {
+                if (timerInterval) clearInterval(timerInterval);
+                state.isTimerActive = false;
+            } else if (type === 'CLEAR_PARTICIPANTS') {
+                state.participants = {};
+            }
+
+            saveState();
+            render();
+        }
+
+        localChannel.onmessage = (event) => {
+            if (event.data && event.data.sender !== myParticipantId) {
+                handleIncomingEvent(event.data);
+            }
+        };
+
+        function startLocalTimer(seconds) {
+            if (timerInterval) clearInterval(timerInterval);
+            state.timer = seconds;
+            state.isTimerActive = true;
+
+            timerInterval = setInterval(() => {
+                if (state.timer > 0) {
+                    state.timer--;
+                    if (currentRole === 'host') {
+                        broadcastMessage('TIMER_TICK', { timer: state.timer });
+                    }
+                    if (state.timer === 0) {
+                        state.isTimerActive = false;
+                        clearInterval(timerInterval);
+                        if (currentRole === 'host') {
+                            autoGradeAll();
+                        }
+                    }
+                }
+                render();
+            }, 1000);
+        }
 
         function saveState() {
             localStorage.setItem('nobrain_30p_state', JSON.stringify(state));
@@ -493,32 +868,7 @@
             } catch(e) {}
         }
 
-        // --- 3. BROADCAST MESSAGING ---
-        function broadcastStateChange(actionType, extra = {}) {
-            saveState();
-            channel.postMessage({
-                type: actionType,
-                state: state,
-                sender: myParticipantId,
-                extra: extra
-            });
-            render();
-        }
-
-        channel.onmessage = (event) => {
-            const data = event.data;
-            if (data && data.state) {
-                state = data.state;
-                saveState();
-                render();
-
-                if (data.type === 'SOUND_EVENT' && currentRole === 'participant') {
-                    playSound(data.extra.sound);
-                }
-            }
-        };
-
-        // --- 4. NAVIGATION & ROLE MANAGEMENT ---
+        // --- 3. NAVIGATION & ROLE MANAGEMENT ---
         function switchRole(role) {
             currentRole = role;
             document.getElementById('view-lobby').classList.add('hidden');
@@ -529,22 +879,22 @@
 
             if (role === 'lobby') {
                 document.getElementById('view-lobby').classList.remove('hidden');
-                badge.className = 'px-3 py-1 rounded-full text-xs font-black uppercase border-2 border-black bg-gray-700 text-white shadow-retro-sm';
+                badge.className = 'px-2.5 py-1 rounded-full text-xs font-black uppercase border-2 border-black bg-gray-700 text-white shadow-retro-sm';
                 badge.innerText = '로비';
             } else if (role === 'participant') {
                 document.getElementById('view-participant').classList.remove('hidden');
-                badge.className = 'px-3 py-1 rounded-full text-xs font-black uppercase border-2 border-black bg-retro-cyan text-black shadow-retro-sm';
-                badge.innerText = '참가자 모드';
+                badge.className = 'px-2.5 py-1 rounded-full text-xs font-black uppercase border-2 border-black bg-retro-cyan text-black shadow-retro-sm';
+                badge.innerText = '참가자';
                 checkParticipantLogin();
             } else if (role === 'host') {
                 document.getElementById('view-host').classList.remove('hidden');
-                badge.className = 'px-3 py-1 rounded-full text-xs font-black uppercase border-2 border-black bg-retro-pink text-white shadow-retro-sm';
-                badge.innerText = '개최자 모드';
+                badge.className = 'px-2.5 py-1 rounded-full text-xs font-black uppercase border-2 border-black bg-retro-pink text-white shadow-retro-sm';
+                badge.innerText = '개최자';
             }
             render();
         }
 
-        // --- 5. PARTICIPANT LOGIC ---
+        // --- 4. PARTICIPANT LOGIC ---
         function checkParticipantLogin() {
             const loginCard = document.getElementById('part-login-card');
             const gameCard = document.getElementById('part-game-card');
@@ -560,7 +910,10 @@
                         submitted: false,
                         statusColor: 'white'
                     };
-                    broadcastStateChange('PARTICIPANT_JOINED');
+                    broadcastMessage('PARTICIPANT_JOINED', {
+                        id: myParticipantId,
+                        name: myName
+                    });
                 }
             } else {
                 loginCard.classList.remove('hidden');
@@ -594,10 +947,15 @@
             state.participants[myParticipantId].answer = ans;
             state.participants[myParticipantId].submitted = true;
 
-            broadcastStateChange('SUBMIT_ANSWER');
+            playSound('tick');
+            broadcastMessage('SUBMIT_ANSWER', {
+                id: myParticipantId,
+                name: myName,
+                answer: ans
+            });
         }
 
-        // --- 6. HOST CONTROL LOGIC ---
+        // --- 5. HOST CONTROL LOGIC ---
         function loadSampleQuestion() {
             const select = document.getElementById('host-sample-questions');
             const val = select.value;
@@ -619,7 +977,6 @@
             }
         }
 
-        // Start 30-second Quiz
         function start30sQuiz() {
             const round = parseInt(document.getElementById('host-round-input').value) || 1;
             const qText = document.getElementById('host-question-input').value.trim();
@@ -638,36 +995,21 @@
 
             playSound('start');
 
-            // Start global countdown
-            if (timerInterval) clearInterval(timerInterval);
+            broadcastMessage('START_30S_QUIZ', {
+                round: round,
+                question: qText,
+                referenceAnswer: aText
+            });
 
-            timerInterval = setInterval(() => {
-                if (state.timer > 0) {
-                    state.timer--;
-                    if (state.timer <= 5 && state.timer > 0) {
-                        playSound('tick');
-                    }
-                    if (state.timer === 0) {
-                        state.isTimerActive = false;
-                        clearInterval(timerInterval);
-                        playSound('wrong');
-                        // Time's up: Auto grade remaining un-graded
-                        autoGradeAll();
-                    }
-                    broadcastStateChange('TIMER_TICK');
-                }
-            }, 1000);
-
-            broadcastStateChange('START_30S_QUIZ');
+            startLocalTimer(30);
         }
 
         function stopTimer() {
             if (timerInterval) clearInterval(timerInterval);
             state.isTimerActive = false;
-            broadcastStateChange('STOP_TIMER');
+            broadcastMessage('STOP_TIMER');
         }
 
-        // NEXT QUESTION: Reset color indicators for ALL participants to WHITE
         function nextQuestionReset() {
             if (timerInterval) clearInterval(timerInterval);
 
@@ -677,7 +1019,6 @@
             state.timer = 30;
             state.isTimerActive = false;
 
-            // Reset all participants' answers and set status back to WHITE
             Object.keys(state.participants).forEach(id => {
                 state.participants[id].answer = '';
                 state.participants[id].submitted = false;
@@ -687,20 +1028,18 @@
             document.getElementById('host-question-input').value = '';
             document.getElementById('host-answer-input').value = '';
 
-            broadcastStateChange('NEXT_QUESTION_RESET');
+            broadcastMessage('NEXT_QUESTION_RESET', { round: state.currentRound });
         }
 
-        // Set Pass/Fail color manually for an individual participant
         function setParticipantColor(id, color) {
             if (state.participants[id]) {
                 state.participants[id].statusColor = color;
                 if (color === 'green') playSound('correct');
                 if (color === 'red') playSound('wrong');
-                broadcastStateChange('COLOR_CHANGE', { participantId: id, color });
+                broadcastMessage('COLOR_CHANGE', { participantId: id, color: color });
             }
         }
 
-        // Auto Grade All based on keyword match
         function autoGradeAll() {
             const refAns = (state.referenceAnswer || '').trim().toLowerCase();
             if (!refAns) {
@@ -720,10 +1059,9 @@
             });
 
             playSound('correct');
-            broadcastStateChange('AUTO_GRADE_COMPLETE');
+            broadcastMessage('AUTO_GRADE_COMPLETE', { participants: state.participants });
         }
 
-        // Populate 30 dummy participants for testing
         function populateDummyParticipants(count = 30) {
             const sampleNames = [
                 "김상식", "이뇌순", "박퀴즈", "최정답", "정오답",
@@ -743,10 +1081,9 @@
                     statusColor: 'white'
                 };
             }
-            broadcastStateChange('POPULATE_DUMMIES');
+            broadcastMessage('STATE_SYNC', { state: state });
         }
 
-        // Simulate random dummy answers for testing
         function simulateDummyAnswers() {
             const mockAnswers = ["훈민정음", "3일", "율곡 이이", "태평양", "경상북도", "모름", "2일", "세종대왕", "X", "O"];
             Object.keys(state.participants).forEach(id => {
@@ -755,18 +1092,20 @@
                     state.participants[id].submitted = true;
                 }
             });
-            broadcastStateChange('SIMULATE_ANSWERS');
+            broadcastMessage('STATE_SYNC', { state: state });
         }
 
         function clearAllParticipants() {
             if (confirm('참가자 목록을 전부 초기화하시겠습니까?')) {
                 state.participants = {};
-                broadcastStateChange('CLEAR_PARTICIPANTS');
+                broadcastMessage('CLEAR_PARTICIPANTS');
             }
         }
 
-        // --- 7. MAIN RENDER FUNCTION ---
+        // --- 6. MAIN RENDER FUNCTION ---
         function render() {
+            updateRoomUI();
+
             // Update Host inputs
             document.getElementById('host-round-input').value = state.currentRound || 1;
             document.getElementById('host-timer-display').innerText = `⏱️ ${state.timer}s`;
@@ -795,19 +1134,16 @@
                 const led = document.getElementById('part-led-indicator');
 
                 if (myInfo.statusColor === 'green') {
-                    // Correct - GREEN
                     statusBar.className = 'bg-retro-green/20 border-4 border-retro-green p-4 rounded-xl shadow-neon-green transition-all duration-500';
                     statusTag.className = 'px-2 py-0.5 rounded text-[11px] font-black bg-retro-green text-black border border-black';
                     statusTag.innerText = '⭕ 정답! (초록불)';
                     led.className = 'led-indicator led-green';
                 } else if (myInfo.statusColor === 'red') {
-                    // Incorrect - RED
                     statusBar.className = 'bg-retro-red/20 border-4 border-retro-red p-4 rounded-xl shadow-neon-pink transition-all duration-500';
                     statusTag.className = 'px-2 py-0.5 rounded text-[11px] font-black bg-retro-red text-white border border-black';
                     statusTag.innerText = '❌ 오답! (붉은불)';
                     led.className = 'led-indicator led-red';
                 } else {
-                    // Default - WHITE (Clean Reset for next question)
                     statusBar.className = 'bg-retro-card border-4 border-black p-4 rounded-xl shadow-retro-black transition-all duration-500';
                     statusTag.className = 'px-2 py-0.5 rounded text-[11px] font-black bg-white text-black border border-black';
                     statusTag.innerText = '⚪ 대기중 (하얀색)';
@@ -815,7 +1151,7 @@
                 }
 
                 // Question Text & Timer
-                document.getElementById('part-question-text').innerText = state.question || '개최자가 30초 퀴즈를 출제할 때까지 기다려주세요...';
+                document.getElementById('part-question-text').innerText = state.question || '주최자가 30초 퀴즈를 출제할 때까지 기다려주세요...';
                 document.getElementById('part-timer-text').innerText = state.timer;
 
                 const timerContainer = document.getElementById('part-timer-container');
@@ -841,7 +1177,7 @@
                     submitBtn.disabled = true;
                     feedback.classList.remove('hidden');
                     feedback.className = 'p-3 rounded-xl border-2 border-black bg-gray-800 text-gray-400 text-center font-bold text-sm';
-                    feedback.innerHTML = '⏳ 다음 문제를 기다리는 중입니다... (상태 초기화 완료)';
+                    feedback.innerHTML = '⏳ 다음 문제를 기다리는 중입니다... (표시등 초기화 완료)';
                 } else if (myInfo.submitted) {
                     inputArea.disabled = false;
                     submitBtn.disabled = false;
@@ -864,8 +1200,8 @@
                     container.innerHTML = `
                         <div class="col-span-full py-12 text-center text-gray-500 space-y-2">
                             <i class="fa-solid fa-users-slash text-4xl"></i>
-                            <p class="font-bold">접속한 참가자가 없습니다 (최대 30명 접속 가능)</p>
-                            <p class="text-xs">참가자 화면 탭을 열거나 '30명 봇 채우기' 버튼으로 테스트해보세요.</p>
+                            <p class="font-bold">접속한 참가자가 없습니다 (최대 30명 동시 접속 가능)</p>
+                            <p class="text-xs">상단의 '모바일 초대' QR코드를 친구에게 보여주거나 링크를 공유해보세요!</p>
                         </div>
                     `;
                     return;
@@ -930,7 +1266,17 @@
 
         window.onload = function() {
             loadSavedState();
-            render();
+            setupMqtt();
+
+            // Auto switch role if query param role is specified (e.g. ?role=participant)
+            const paramRole = urlParams.get('role');
+            if (paramRole === 'participant') {
+                switchRole('participant');
+            } else if (paramRole === 'host') {
+                switchRole('host');
+            } else {
+                render();
+            }
         };
     </script>
 </body>
